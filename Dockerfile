@@ -57,8 +57,8 @@ COPY . .
 
 RUN if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install .; fi
 
-CMD ["sh", "-lc", "python run_mcp.py"]
-
 RUN pip install uvicorn
 
 RUN pip install uvicorn fastapi
+
+CMD ["sh", "-lc", "python run_mcp.py"]
