@@ -1,13 +1,6 @@
-#!/usr/bin/env python3
-"""Entry point for Garmin MCP server — avoids module import issues."""
-
-import sys
-from pathlib import Path
-
-# Ensure the project is on the path
-sys.path.insert(0, str(Path(__file__).parent))
-
+import os
 from garmin_mcp.server import mcp
 
-if __name__ == "__main__":
-    mcp.run(transport="stdio")
+if name == "main":
+    port = int(os.environ.get("PORT", 8000))
+    mcp.run(transport="sse", host="0.0.0.0", port=port)
