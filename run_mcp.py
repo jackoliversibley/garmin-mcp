@@ -1,7 +1,7 @@
 import os
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
 
 app = FastAPI()
@@ -9,7 +9,7 @@ app = FastAPI()
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 
 @app.get("/.well-known/oauth-authorization-server")
-async def oauth_authorization_server():
+async def oauth_discovery():
     return JSONResponse({
         "issuer": BASE_URL,
         "authorization_endpoint": f"{BASE_URL}/oauth/authorize",
@@ -22,20 +22,22 @@ async def oauth_authorization_server():
 
 @app.api_route("/oauth/authorize", methods=["GET", "POST"])
 async def oauth_authorize(request: Request):
-    return JSONResponse({
-        "ok": True,
-        "message": "dummy authorization endpoint",
-        "issuer": BASE_URL,
-        "authorization_endpoint": f"{BASE_URL}/oauth/authorize"
-    })
+    state = request.query_params.get("state")
+    redirect_uri = request.query_params.get("redirect_uri")
+    
+    if not redirect_uri:
+        return JSONResponse({"error": "missing redirect_uri"}, status_code=400)
+        
+    url = f"{redirect_uri}?code=dummy_code&state={state}"
+    return RedirectResponse(url=url)
 
 @app.api_route("/oauth/token", methods=["POST"])
 async def oauth_token(request: Request):
-    return JSONResponse({
-        "access_token": "dummy-access-token",
+    return JSONResponse({"access_token": "dummy_access_token",
         "token_type": "bearer",
         "expires_in": 3600,
-        "refresh_token": "dummy-refresh-token","scope": "openid profile offline_access"
+        "refresh_token": "dummy_refresh_token",
+        "scope": "openid profile offline_access"
     })
 
 @app.api_route("/oauth/register", methods=["GET", "POST"])
