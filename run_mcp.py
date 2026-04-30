@@ -1,6 +1,6 @@
 import os
 from garmin_mcp.server import mcp
 
-if name == "main":
-    port = int(os.environ.get("PORT", 8000))
+if __name__ == "__main__":
+    port = 8080
     mcp.run(transport="sse", host="0.0.0.0", port=port)
