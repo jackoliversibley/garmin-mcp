@@ -1,6 +1,7 @@
 import os
+import uvicorn
 from garmin_mcp.server import mcp
 
 if __name__ == "__main__":
-    port = 8080
-    mcp.run(transport="sse", port=port)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(mcp.sse_app(), host="0.0.0.0", port=port)
