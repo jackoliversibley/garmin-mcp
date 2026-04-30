@@ -17,7 +17,8 @@ async def oauth_discovery():
         "registration_endpoint": f"{BASE_URL}/oauth/register",
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
-        "grant_types_supported": ["authorization_code", "refresh_token"]
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "mcp_sse_endpoint": f"{BASE_URL}/mcp/sse"
     })
 
 @app.api_route("/oauth/authorize", methods=["GET", "POST"])
@@ -30,8 +31,8 @@ async def oauth_authorize(request: Request):
 
 @app.api_route("/oauth/token", methods=["POST"])
 async def oauth_token(request: Request):
-    return JSONResponse({
-        "access_token": "dummy_access_token","token_type": "bearer",
+    return JSONResponse({"access_token": "dummy_access_token",
+        "token_type": "bearer",
         "expires_in": 3600,
         "refresh_token": "dummy_refresh_token",
         "scope": "openid profile offline_access"
@@ -47,8 +48,8 @@ async def oauth_register(request: Request):
         "redirect_uris": [f"{BASE_URL}/oauth/callback"]
     })
 
-app.mount("/", mcp.sse_app())
+app.mount("/mcp", mcp.sse_app())
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
