@@ -29,7 +29,8 @@ async def oauth_authorize(request: Request):
     state = request.query_params.get("state")
     redirect_uri = request.query_params.get("redirect_uri")
     if not redirect_uri:
-        return JSONResponse({"error": "missing redirect_uri"}, status_code=400)return RedirectResponse(f"{redirect_uri}?code=dummy_code&state={state}")
+        return JSONResponse({"error": "missing redirect_uri"}, status_code=400)
+        return RedirectResponse(f"{redirect_uri}?code=dummy_code&state={state}")
 
 @app.api_route("/oauth/token", methods=["POST"])
 async def oauth_token(request: Request):
