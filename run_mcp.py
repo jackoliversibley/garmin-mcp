@@ -11,7 +11,7 @@ app = FastAPI()
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 
 sse = SseServerTransport(
-    "/messages/",
+    "/mcp/messages/",
     security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False)
 )
 
