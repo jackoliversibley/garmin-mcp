@@ -2,14 +2,15 @@ import os
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from mcp.server.transport_security import TransportSecuritySettings
 from garmin_mcp.server import mcp
 
-mcp._transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+mcp._transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=["garmin-mcp-production-48d4.up.railway.app"]
+)
 
 app = FastAPI()
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 
