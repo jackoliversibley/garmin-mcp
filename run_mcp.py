@@ -2,9 +2,13 @@ import os
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from garmin_mcp.server import mcp
 
 app = FastAPI()
+
+explicitly telling the app to trust the railway host
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 
@@ -26,12 +30,12 @@ async def oauth_authorize(request: Request):
     state = request.query_params.get("state")
     redirect_uri = request.query_params.get("redirect_uri")
     if not redirect_uri:
-        return JSONResponse({"error": "missing redirect_uri"}, status_code=400)
-    return RedirectResponse(f"{redirect_uri}?code=dummy_code&state={state}")
+        return JSONResponse({"error": "missing redirect_uri"}, status_code=400)return RedirectResponse(f"{redirect_uri}?code=dummy_code&state={state}")
 
 @app.api_route("/oauth/token", methods=["POST"])
 async def oauth_token(request: Request):
-    return JSONResponse({"access_token": "dummy_access_token",
+    return JSONResponse({
+        "access_token": "dummy_access_token",
         "token_type": "bearer",
         "expires_in": 3600,
         "refresh_token": "dummy_refresh_token",
