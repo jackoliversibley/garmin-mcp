@@ -7,7 +7,6 @@ from garmin_mcp.server import mcp
 
 app = FastAPI()
 
-explicitly telling the app to trust the railway host
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
