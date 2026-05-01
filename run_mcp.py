@@ -48,8 +48,10 @@ async def oauth_register(request: Request):
         "redirect_uris": [f"{BASE_URL}/oauth/callback"]
     })
 
+mounting on /mcp to avoid root path conflicts
 app.mount("/mcp", mcp.sse_app())
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
+proxy_headers=True is the key to making the host validation pass
     uvicorn.run(app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
