@@ -1,7 +1,7 @@
 import os
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from mcp.server.sse import SseServerTransport
 from mcp.server.transport_security import TransportSecuritySettings
 from garmin_mcp.server import mcp
@@ -11,22 +11,24 @@ app = FastAPI()
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 
 sse = SseServerTransport(
-    "/messages",
-    security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    "/messages/",
+    security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_discovery():
-    return JSONResponse({
-        "issuer": BASE_URL,
-        "authorization_endpoint": f"{BASE_URL}/oauth/authorize",
-        "token_endpoint": f"{BASE_URL}/oauth/token",
-        "registration_endpoint": f"{BASE_URL}/oauth/register",
-        "response_types_supported": ["code"],
-        "response_modes_supported": ["query"],
-        "grant_types_supported": ["authorization_code", "refresh_token"],
-        "mcp_sse_endpoint": f"{BASE_URL}/sse"
-    })
+    return JSONResponse(
+        {
+            "issuer": BASE_URL,
+            "authorization_endpoint": f"{BASE_URL}/oauth/authorize",
+            "token_endpoint": f"{BASE_URL}/oauth/token",
+            "registration_endpoint": f"{BASE_URL}/oauth/register",
+            "response_types_supported": ["code"],
+            "response_modes_supported": ["query"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "mcp_sse_endpoint": f"{BASE_URL}/sse",
+        }
+    )
 
 @app.api_route("/oauth/authorize", methods=["GET", "POST"])
 async def oauth_authorize(request: Request):
@@ -38,32 +40,42 @@ async def oauth_authorize(request: Request):
 
 @app.api_route("/oauth/token", methods=["POST"])
 async def oauth_token(request: Request):
-    return JSONResponse({
-        "access_token": "dummy_access_token",
-        "token_type": "bearer",
-        "expires_in": 3600,
-        "refresh_token": "dummy_refresh_token",
-        "scope": "openid profile offline_access"
-    })
+    return JSONResponse(
+        {
+            "access_token": "dummy_access_token",
+            "token_type": "bearer",
+            "expires_in": 3600,
+            "refresh_token": "dummy_refresh_token",
+            "scope": "openid profile offline_access",
+        }
+    )
 
 @app.api_route("/oauth/register", methods=["GET", "POST"])
 async def oauth_register(request: Request):
-    return JSONResponse({
-        "client_id": "dummy-client-id",
-        "client_secret": "dummy-client-secret",
-        "client_id_issued_at": 0,
-        "token_endpoint_auth_method": "none",
-        "redirect_uris": [f"{BASE_URL}/oauth/callback"]
-    })
+    return JSONResponse(
+        {
+            "client_id": "dummy-client-id",
+            "client_secret": "dummy-client-secret",
+            "client_id_issued_at": 0,
+            "token_endpoint_auth_method": "none",
+            "redirect_uris": [f"{BASE_URL}/oauth/callback"],
+        }
+    )
 
 @app.get("/sse")
 async def sse_endpoint(request: Request):
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-        await mcp._mcp_server.run(streams[0], streams[1], mcp._mcp_server.create_initialization_options())
+        await mcp._mcp_server.run(
+            streams[0],
+            streams[1],
+            mcp._mcp_server.create_initialization_options(),
+        )
+    return Response()
 
-@app.post("/messages")
+@app.post("/messages/")
 async def message_endpoint(request: Request):
     await sse.handle_post_message(request.scope, request.receive, request._send)
+    return Response()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
