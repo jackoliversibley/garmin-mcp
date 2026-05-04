@@ -1,9 +1,9 @@
 import logging
 import os
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-import uvicorn
 from garmin_mcp.server import mcp
 from mcp.server.sse import SseServerTransport
 from mcp.server.transport_security import TransportSecuritySettings
@@ -40,6 +40,7 @@ async def log_registered_routes() -> None:
         methods = sorted(getattr(route, "methods", []) or [])
         if path:
             route_specs.append(f"{path} [{', '.join(methods)}]")
+    logger.info("starting uvicorn on 0.0.0.0:%s", os.environ.get("PORT", "8080"))
     logger.info("registered MCP tools: %s", tool_names)
     logger.info("registered FastAPI routes: %s", route_specs)
 
@@ -103,8 +104,12 @@ async def sse_endpoint(request: Request):
 @app.post("/messages")
 @app.post("/messages/")
 async def message_endpoint(request: Request):
-    await sse.handle_post_message(request.scope, request.receive, request._send)
-    return Response()
+    try:
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+        return Response()
+    except Exception:
+        logger.exception("failed handling MCP message POST")
+        return JSONResponse({"error": "failed handling MCP message POST"}, status_code=500)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
