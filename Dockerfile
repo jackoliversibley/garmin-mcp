@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIPNOCACHE_DIR=1 \
     PIPDISABLEPIPVERSIONCHECK=1 \
-    PORT=8000
+    PORT=8080
 
 WORKDIR /app
 
@@ -59,8 +59,8 @@ COPY . .
 
 RUN if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install .; fi
 
-RUN pip install uvicorn
-
 RUN pip install uvicorn fastapi
 
-CMD ["xvfb-run", "-a", "python", "run_mcp.py"]
+EXPOSE 8080
+
+CMD ["sh", "-lc", "exec xvfb-run -a --auto-servernum --server-args='-screen 0 1920x1080x24' python -u run_mcp.py"]
