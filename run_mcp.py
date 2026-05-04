@@ -1,8 +1,9 @@
 import logging
 import os
-import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
+import uvicorn
 from garmin_mcp.server import mcp
 from mcp.server.sse import SseServerTransport
 from mcp.server.transport_security import TransportSecuritySettings
@@ -10,7 +11,19 @@ from mcp.server.transport_security import TransportSecuritySettings
 app = FastAPI()
 
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
+RAILWAY_HOST = "garmin-mcp-production-48d4.up.railway.app"
 logger = logging.getLogger("uvicorn.error")
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[
+        RAILWAY_HOST,
+        "*.up.railway.app",
+        "localhost",
+        "127.0.0.1",
+        "[::1]",
+    ],
+)
 
 sse = SseServerTransport(
     "/messages",
@@ -95,4 +108,12 @@ async def message_endpoint(request: Request):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port, proxy_headers=True, forwarded_allow_ips="*")
+    logger.info("starting uvicorn on 0.0.0.0:%s", port)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+        log_level="info",
+    )
