@@ -11,7 +11,7 @@ app = FastAPI()
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 
 sse = SseServerTransport(
-    "/mcp/messages/",
+    "/messages",
     security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False)
 )
 
@@ -25,7 +25,7 @@ async def oauth_discovery():
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
-        "mcp_sse_endpoint": f"{BASE_URL}/mcp/sse"
+        "mcp_sse_endpoint": f"{BASE_URL}/sse"
     })
 
 @app.api_route("/oauth/authorize", methods=["GET", "POST"])
@@ -56,12 +56,12 @@ async def oauth_register(request: Request):
         "redirect_uris": [f"{BASE_URL}/oauth/callback"]
     })
 
-@app.get("/mcp/sse")
+@app.get("/sse")
 async def sse_endpoint(request: Request):
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await mcp._mcp_server.run(streams[0], streams[1], mcp._mcp_server.create_initialization_options())
 
-@app.post("/mcp/messages/")
+@app.post("/messages")
 async def message_endpoint(request: Request):
     await sse.handle_post_message(request.scope, request.receive, request._send)
 
