@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     wget \
     unzip \
+    xauth \
+    xvfb \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -61,4 +63,4 @@ RUN pip install uvicorn
 
 RUN pip install uvicorn fastapi
 
-CMD ["sh", "-lc", "python run_mcp.py"]
+CMD ["xvfb-run", "-a", "python", "run_mcp.py"]
