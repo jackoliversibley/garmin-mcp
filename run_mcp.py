@@ -1,26 +1,34 @@
+import logging
 import os
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from garmin_mcp.server import mcp
+from mcp.server.sse import SseServerTransport
+from mcp.server.transport_security import TransportSecuritySettings
 
 app = FastAPI()
 
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
+logger = logging.getLogger("uvicorn.error")
 
-mcp_app = mcp.sse_app(
-    sse_path="/sse",
-    message_path="/messages/",
-    host="0.0.0.0",
+sse = SseServerTransport(
+    "/messages",
+    security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
-app.router.routes.extend(mcp_app.routes)
 
 @app.on_event("startup")
-async def verify_registered_tools() -> None:
+async def log_registered_routes() -> None:
     tools = await mcp._mcp_server.list_tools()
     tool_names = [tool.name for tool in tools]
-    if "garmin_sync" not in tool_names:
-        raise RuntimeError(f"garmin_sync tool not registered. Available tools: {tool_names}")
+    route_specs = []
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        methods = sorted(getattr(route, "methods", []) or [])
+        if path:
+            route_specs.append(f"{path} [{', '.join(methods)}]")
+    logger.info("registered MCP tools: %s", tool_names)
+    logger.info("registered FastAPI routes: %s", route_specs)
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_discovery():
@@ -68,6 +76,22 @@ async def oauth_register(request: Request):
             "redirect_uris": [f"{BASE_URL}/oauth/callback"],
         }
     )
+
+@app.get("/sse")
+async def sse_endpoint(request: Request):
+    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+        await mcp._mcp_server.run(
+            streams[0],
+            streams[1],
+            mcp._mcp_server.create_initialization_options(),
+        )
+    return Response()
+
+@app.post("/messages")
+@app.post("/messages/")
+async def message_endpoint(request: Request):
+    await sse.handle_post_message(request.scope, request.receive, request._send)
+    return Response()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
