@@ -21,18 +21,30 @@ sse = SseServerTransport(
 )
 
 
-async def _maybe_await(value):
-    if inspect.isawaitable(value):
-        return await value
-    return value
+async def _get_tool_names():
+    list_tools = getattr(mcp._mcp_server, "list_tools", None)
+    if list_tools is None or not callable(list_tools):
+        raise TypeError(f"list_tools is not callable: {type(list_tools)!r}")
+
+    try:
+        result = list_tools()
+    except TypeError:
+        # Some runtimes may expose list_tools as an async function requiring direct await.
+        result = list_tools
+
+    if inspect.isawaitable(result):
+        result = await result
+    elif inspect.iscoroutinefunction(result):
+        result = await result()
+
+    if inspect.isfunction(result):
+        raise TypeError(f"list_tools returned a function instead of tool data: {result!r}")
+
+    return [tool.name for tool in result]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    tools_value = mcp._mcp_server.list_tools()
-    tools = await _maybe_await(tools_value)
-    tool_names = [tool.name for tool in tools]
-
     route_specs = []
     for route in app.routes:
         path = getattr(route, "path", None)
@@ -41,7 +53,11 @@ async def lifespan(app: FastAPI):
             route_specs.append(f"{path} [{', '.join(methods)}]")
 
     logger.info("starting uvicorn on 0.0.0.0:%s", os.environ.get("PORT", "8080"))
-    logger.info("registered MCP tools: %s", tool_names)
+    try:
+        tool_names = await _get_tool_names()
+        logger.info("registered MCP tools: %s", tool_names)
+    except Exception:
+        logger.exception("startup tool verification failed; continuing without tool list")
     logger.info("registered FastAPI routes: %s", route_specs)
     yield
 
