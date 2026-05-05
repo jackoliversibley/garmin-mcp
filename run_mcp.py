@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
@@ -26,7 +26,7 @@ def _build_tool_names():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     route_specs = []
     for route in app.routes:
         path = getattr(route, "path", None)
@@ -46,7 +46,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+app = mcp.sse_app()
+app.router.lifespan_context = lifespan
 
 app.add_middleware(
     TrustedHostMiddleware,
@@ -58,10 +59,6 @@ app.add_middleware(
         "[::1]",
     ],
 )
-
-# Mount the SDK-managed MCP app so /sse and /messages are registered together.
-# No lifespan kwarg is passed here; the lifespan handler belongs on FastAPI.
-app.mount("/", mcp.sse_app())
 
 
 @app.get("/.well-known/oauth-authorization-server")
