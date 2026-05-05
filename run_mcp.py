@@ -59,11 +59,9 @@ app.add_middleware(
     ],
 )
 
-# Mount the SDK-managed MCP app so /sse and /messages are registered together
-app.mount(
-    "/",
-    mcp.sse_app(sse_path="/sse", message_path="/messages", host="0.0.0.0"),
-)
+# Mount the SDK-managed MCP app so /sse and /messages are registered together.
+# No lifespan kwarg is passed here; the lifespan handler belongs on FastAPI.
+app.mount("/", mcp.sse_app())
 
 
 @app.get("/.well-known/oauth-authorization-server")
