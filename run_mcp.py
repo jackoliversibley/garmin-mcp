@@ -4,7 +4,7 @@ import os
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
@@ -26,7 +26,7 @@ def _build_tool_names():
 
 
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(app: FastAPI):
     route_specs = []
     for route in app.routes:
         path = getattr(route, "path", None)
@@ -46,9 +46,7 @@ async def lifespan(app):
     yield
 
 
-# Make the SDK app primary, letting it use its supported default SSE/message routes.
-app = mcp.sse_app()
-app.router.lifespan_context = lifespan
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     TrustedHostMiddleware,
@@ -111,6 +109,11 @@ async def oauth_register(request: Request):
             "redirect_uris": [f"{BASE_URL}/oauth/callback"],
         }
     )
+
+
+# Mount the MCP Starlette app after the OAuth routes so the root MCP endpoints are available
+# without turning the whole application into a Starlette instance.
+app.mount("/", mcp.sse_app())
 
 
 if __name__ == "__main__":
