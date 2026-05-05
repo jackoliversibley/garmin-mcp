@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
+from starlette.routing import Route
 
 logger = logging.getLogger("uvicorn.error")
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
@@ -111,9 +112,12 @@ async def oauth_register(request: Request):
     )
 
 
-# Mount the MCP Starlette app after the OAuth routes so the root MCP endpoints are available
-# without losing FastAPI decorator support for the OAuth handlers above.
-app.mount("/", mcp.sse_app())
+# Register the MCP Starlette app at exact root paths instead of mounting it under an extra prefix.
+# This keeps /sse and /messages aligned with the SDK's own routing.
+app.router.routes.append(Route("/sse", endpoint=mcp.sse_app(), methods=["GET"]))
+app.router.routes.append(Route("/sse/", endpoint=mcp.sse_app(), methods=["GET"]))
+app.router.routes.append(Route("/messages", endpoint=mcp.sse_app(), methods=["POST"]))
+app.router.routes.append(Route("/messages/", endpoint=mcp.sse_app(), methods=["POST"]))
 
 
 if __name__ == "__main__":
