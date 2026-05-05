@@ -26,7 +26,7 @@ def _build_tool_names():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     route_specs = []
     for route in app.routes:
         path = getattr(route, "path", None)
@@ -112,7 +112,7 @@ async def oauth_register(request: Request):
 
 
 # Mount the MCP Starlette app after the OAuth routes so the root MCP endpoints are available
-# without turning the whole application into a Starlette instance.
+# without losing FastAPI decorator support for the OAuth handlers above.
 app.mount("/", mcp.sse_app())
 
 
