@@ -1,5 +1,8 @@
+import inspect
 import logging
 import os
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -8,11 +11,42 @@ from garmin_mcp.server import mcp
 from mcp.server.sse import SseServerTransport
 from mcp.server.transport_security import TransportSecuritySettings
 
-app = FastAPI()
-
+logger = logging.getLogger("uvicorn.error")
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 RAILWAY_HOST = "garmin-mcp-production-48d4.up.railway.app"
-logger = logging.getLogger("uvicorn.error")
+
+sse = SseServerTransport(
+    "/messages",
+    security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    tools_value = mcp._mcp_server.list_tools()
+    tools = await _maybe_await(tools_value)
+    tool_names = [tool.name for tool in tools]
+
+    route_specs = []
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        methods = sorted(getattr(route, "methods", []) or [])
+        if path:
+            route_specs.append(f"{path} [{', '.join(methods)}]")
+
+    logger.info("starting uvicorn on 0.0.0.0:%s", os.environ.get("PORT", "8080"))
+    logger.info("registered MCP tools: %s", tool_names)
+    logger.info("registered FastAPI routes: %s", route_specs)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     TrustedHostMiddleware,
@@ -25,24 +59,6 @@ app.add_middleware(
     ],
 )
 
-sse = SseServerTransport(
-    "/messages",
-    security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
-
-@app.on_event("startup")
-async def log_registered_routes() -> None:
-    tools = await mcp._mcp_server.list_tools()
-    tool_names = [tool.name for tool in tools]
-    route_specs = []
-    for route in app.routes:
-        path = getattr(route, "path", None)
-        methods = sorted(getattr(route, "methods", []) or [])
-        if path:
-            route_specs.append(f"{path} [{', '.join(methods)}]")
-    logger.info("starting uvicorn on 0.0.0.0:%s", os.environ.get("PORT", "8080"))
-    logger.info("registered MCP tools: %s", tool_names)
-    logger.info("registered FastAPI routes: %s", route_specs)
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_discovery():
@@ -59,6 +75,7 @@ async def oauth_discovery():
         }
     )
 
+
 @app.api_route("/oauth/authorize", methods=["GET", "POST"])
 async def oauth_authorize(request: Request):
     state = request.query_params.get("state")
@@ -66,6 +83,7 @@ async def oauth_authorize(request: Request):
     if not redirect_uri:
         return JSONResponse({"error": "missing redirect_uri"}, status_code=400)
     return RedirectResponse(f"{redirect_uri}?code=dummy_code&state={state}")
+
 
 @app.api_route("/oauth/token", methods=["POST"])
 async def oauth_token(request: Request):
@@ -79,6 +97,7 @@ async def oauth_token(request: Request):
         }
     )
 
+
 @app.api_route("/oauth/register", methods=["GET", "POST"])
 async def oauth_register(request: Request):
     return JSONResponse(
@@ -91,6 +110,7 @@ async def oauth_register(request: Request):
         }
     )
 
+
 @app.get("/sse")
 async def sse_endpoint(request: Request):
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
@@ -101,6 +121,7 @@ async def sse_endpoint(request: Request):
         )
     return Response()
 
+
 @app.post("/messages")
 @app.post("/messages/")
 async def message_endpoint(request: Request):
@@ -110,6 +131,7 @@ async def message_endpoint(request: Request):
     except Exception:
         logger.exception("failed handling MCP message POST")
         return JSONResponse({"error": "failed handling MCP message POST"}, status_code=500)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
