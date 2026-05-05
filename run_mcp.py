@@ -46,7 +46,9 @@ async def lifespan(app):
     yield
 
 
-app = mcp.sse_app()
+# Make the SDK app primary, but pin the paths explicitly so the client's /sse and /messages
+# requests match the registered routes exactly.
+app = mcp.sse_app(sse_path="/sse", message_path="/messages")
 app.router.lifespan_context = lifespan
 
 app.add_middleware(
