@@ -6,41 +6,23 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
-from mcp.server.sse import SseServerTransport
-from mcp.server.transport_security import TransportSecuritySettings
 
 logger = logging.getLogger("uvicorn.error")
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 RAILWAY_HOST = "garmin-mcp-production-48d4.up.railway.app"
 
-sse = SseServerTransport(
-    "/messages",
-    security_settings=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
 
-
-async def _get_tool_names():
+def _build_tool_names():
     list_tools = getattr(mcp._mcp_server, "list_tools", None)
     if list_tools is None or not callable(list_tools):
         raise TypeError(f"list_tools is not callable: {type(list_tools)!r}")
 
-    try:
-        result = list_tools()
-    except TypeError:
-        # Some runtimes may expose list_tools as an async function requiring direct await.
-        result = list_tools
-
+    result = list_tools()
     if inspect.isawaitable(result):
-        result = await result
-    elif inspect.iscoroutinefunction(result):
-        result = await result()
-
-    if inspect.isfunction(result):
-        raise TypeError(f"list_tools returned a function instead of tool data: {result!r}")
-
-    return [tool.name for tool in result]
+        return result
+    return result
 
 
 @asynccontextmanager
@@ -54,7 +36,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("starting uvicorn on 0.0.0.0:%s", os.environ.get("PORT", "8080"))
     try:
-        tool_names = await _get_tool_names()
+        tools_result = _build_tool_names()
+        tools = await tools_result if inspect.isawaitable(tools_result) else tools_result
+        tool_names = [tool.name for tool in tools]
         logger.info("registered MCP tools: %s", tool_names)
     except Exception:
         logger.exception("startup tool verification failed; continuing without tool list")
@@ -73,6 +57,12 @@ app.add_middleware(
         "127.0.0.1",
         "[::1]",
     ],
+)
+
+# Mount the SDK-managed MCP app so /sse and /messages are registered together
+app.mount(
+    "/",
+    mcp.sse_app(sse_path="/sse", message_path="/messages", host="0.0.0.0"),
 )
 
 
@@ -125,28 +115,6 @@ async def oauth_register(request: Request):
             "redirect_uris": [f"{BASE_URL}/oauth/callback"],
         }
     )
-
-
-@app.get("/sse")
-async def sse_endpoint(request: Request):
-    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-        await mcp._mcp_server.run(
-            streams[0],
-            streams[1],
-            mcp._mcp_server.create_initialization_options(),
-        )
-    return Response()
-
-
-@app.post("/messages")
-@app.post("/messages/")
-async def message_endpoint(request: Request):
-    try:
-        await sse.handle_post_message(request.scope, request.receive, request._send)
-        return Response()
-    except Exception:
-        logger.exception("failed handling MCP message POST")
-        return JSONResponse({"error": "failed handling MCP message POST"}, status_code=500)
 
 
 if __name__ == "__main__":
