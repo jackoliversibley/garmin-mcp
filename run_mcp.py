@@ -8,10 +8,33 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
+from mcp.server.transport_security import TransportSecuritySettings
 
 logger = logging.getLogger("uvicorn.error")
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 RAILWAY_HOST = "garmin-mcp-production-48d4.up.railway.app"
+
+# FastMCP's DNS rebinding protection defaults to enabled with an empty allowed_hosts
+# list, which rejects every incoming Host header with a 421. We must explicitly
+# allow the Railway domain before calling sse_app() so SseServerTransport is
+# initialised with the correct TransportSecuritySettings.
+# FastAPI's TrustedHostMiddleware above already enforces host allowlisting at the
+# outer layer, so this inner check is belt-and-braces rather than the main guard.
+mcp.settings.transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=[
+        RAILWAY_HOST,
+        "localhost",
+        "127.0.0.1",
+        "[::1]",
+    ],
+    allowed_origins=[
+        f"https://{RAILWAY_HOST}",
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://[::1]:*",
+    ],
+)
 
 # Build the SSE app ONCE so all routes share the same SseServerTransport instance.
 # Calling mcp.sse_app() multiple times creates separate transport instances whose
