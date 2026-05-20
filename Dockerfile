@@ -50,6 +50,13 @@ RUN curl -fSsL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor
  && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
  && rm -rf /var/lib/apt/lists/*
 
+# Install Litestream for SQLite replication from Cloudflare R2
+RUN curl -fsSLo /tmp/litestream.tar.gz \
+    "https://github.com/benbjohnson/litestream/releases/download/v0.5.11/litestream-0.5.11-linux-x86_64.tar.gz" \
+ && tar -xzf /tmp/litestream.tar.gz -C /usr/local/bin \
+ && chmod +x /usr/local/bin/litestream \
+ && rm /tmp/litestream.tar.gz
+
 COPY requirements*.txt ./
 
 RUN python -m pip install --upgrade pip setuptools wheel \
@@ -61,6 +68,12 @@ RUN if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install .; fi
 
 RUN pip install uvicorn fastapi
 
+# Persistent volume for garmin.db — mount at /app/data in Railway
+ENV GARMIN_DATA_DIR=/app/data
+RUN mkdir -p /app/data
+
+RUN chmod +x /app/start.sh
+
 EXPOSE 8080
 
-CMD ["sh", "-lc", "exec xvfb-run -a --auto-servernum --server-args='-screen 0 1920x1080x24' python -u run_mcp.py"]
+CMD ["/app/start.sh"]
