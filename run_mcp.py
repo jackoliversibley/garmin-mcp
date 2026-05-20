@@ -8,11 +8,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from garmin_mcp.server import mcp
-from starlette.routing import Route
 
 logger = logging.getLogger("uvicorn.error")
 BASE_URL = "https://garmin-mcp-production-48d4.up.railway.app"
 RAILWAY_HOST = "garmin-mcp-production-48d4.up.railway.app"
+
+# Build the SSE app ONCE so all routes share the same SseServerTransport instance.
+# Calling mcp.sse_app() multiple times creates separate transport instances whose
+# session maps never overlap — a POST to /messages would 500 because the session
+# opened on /sse lives in a different object.
+_sse_app = mcp.sse_app()
 
 
 def _build_tool_names():
@@ -59,6 +64,12 @@ app.add_middleware(
         "[::1]",
     ],
 )
+
+
+@app.get("/health")
+async def health():
+    """Railway health check endpoint."""
+    return {"status": "ok"}
 
 
 @app.get("/.well-known/oauth-authorization-server")
@@ -112,12 +123,10 @@ async def oauth_register(request: Request):
     )
 
 
-# Register the MCP Starlette app at exact root paths instead of mounting it under an extra prefix.
-# This keeps /sse and /messages aligned with the SDK's own routing.
-app.router.routes.append(Route("/sse", endpoint=mcp.sse_app(), methods=["GET"]))
-app.router.routes.append(Route("/sse/", endpoint=mcp.sse_app(), methods=["GET"]))
-app.router.routes.append(Route("/messages", endpoint=mcp.sse_app(), methods=["POST"]))
-app.router.routes.append(Route("/messages/", endpoint=mcp.sse_app(), methods=["POST"]))
+# Mount the single SSE app instance to handle /sse (GET) and /messages (POST).
+# Using app.mount() with a Starlette sub-app is correct for Starlette 1.0+;
+# Route() is for function endpoints only and breaks ASGI sub-app dispatch.
+app.mount("/", _sse_app)
 
 
 if __name__ == "__main__":
